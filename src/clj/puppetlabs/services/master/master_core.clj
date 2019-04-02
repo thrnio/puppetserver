@@ -759,6 +759,28 @@
       wrap-with-jruby-queue-limit
       jruby-request/wrap-with-error-handling))
 
+(schema/defn ^:always-validate
+v4-environment-module-classes-fn :- IFn
+  [jruby-service :- (schema/protocol jruby-protocol/JRubyPuppetService)]
+  (fn [request]
+    (let [environment (jruby-request/get-environment-from-request request)]
+      {:status 200
+       :headers {"Content-Type" "application/json"}
+       :body (json/encode
+              (jruby-protocol/get-environment-module-class-info jruby-service
+                                                                (:jruby-instance request)
+                                                                environment))})))
+
+(schema/defn ^:always-validate
+  v4-environment-module-classes-handler :- IFn
+  [jruby-service :- (schema/protocol jruby-protocol/JRubyPuppetService)
+   wrap-with-jruby-queue-limit :- IFn]
+  (-> (v4-environment-module-classes-fn jruby-service)
+   (jruby-request/wrap-with-jruby-instance jruby-service)
+      wrap-with-jruby-queue-limit
+      jruby-request/wrap-with-error-handling)
+)
+
 (def MetricIdsForStatus (schema/atom [[schema/Str]]))
 
 (schema/defn http-client-metrics-summary
@@ -852,13 +874,18 @@
   (let [v4-catalog-handler (v4-catalog-handler
                              jruby-service
                              wrap-with-jruby-queue-limit
-                             current-code-id-fn)]
+                             current-code-id-fn)
+        v4-environment-module-classes-handler (v4-environment-module-classes-handler
+                                               jruby-service
+                                               wrap-with-jruby-queue-limit)]
     (comidi/context
           "/v4"
           (comidi/wrap-routes
            (comidi/routes
             (comidi/POST "/catalog" request
-                         (v4-catalog-handler request)))
+                         (v4-catalog-handler request))
+            (comidi/GET "/environment_module_classes" request
+                        (v4-environment-module-classes-handler request)))
            clojure-request-wrapper))))
 
 (schema/defn ^:always-validate
@@ -879,7 +906,7 @@
                                       get-code-content-fn
                                       current-code-id-fn
                                       environment-class-cache-enabled)
-                   clojure-request-wrapper )))
+                   clojure-request-wrapper)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Lifecycle Helper Functions
