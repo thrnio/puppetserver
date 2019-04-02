@@ -77,6 +77,19 @@ class Puppet::Server::Master
     end
   end
 
+  def getModuleClassInfoForEnvironment(env)
+    environment = @env_loader.get(env)
+    unless environment.nil?
+      class_files_by_module = self.class.getManifestsByModule(environment)
+      class_files_by_module.transform_values do |manifest_files|
+        environments = Hash[env, manifest_files]
+        classes_per_env =
+            Puppet::InfoService::ClassInformationService.new.classes_per_environment(environments)
+        classes_per_env[env]
+      end
+    end
+  end
+
   def getModuleInfoForEnvironment(env)
     environment = @env_loader.get(env)
     unless environment.nil?
@@ -168,5 +181,14 @@ class Puppet::Server::Master
 
     module_manifests = env.modules.collect {|mod| mod.all_manifests}
     manifests.concat(module_manifests).flatten.uniq
+  end
+
+  def self.getManifestsByModule(env)
+    manifests = {}
+    env.modules.each do |mod|
+      module_name = mod.forge_name || mod.name
+      manifests[module_name] = mod.all_manifests
+    end
+    manifests
   end
 end
